@@ -3,8 +3,9 @@ cls
 
 global wd = "C:\Users\" + c(username) + "\OneDrive - GOUVCI\CAE_INS - Fichiers de Cellule d'Analyses Economiques ( CAE)\TRAVAUX DE RECHERCHES\En_Cours\Conflits_Education"
 
-use "$wd\data\base_education_Impact.dta", clear
+/*use "$wd\data\base_education_Impact.dta", clear*/
 
+use "$wd\data\base_impact_education_30_11_23.dta", clear
 *use "C:\Users\hp\Downloads\Base_education(EHCVM-19).dta"
 
 ****Variables éducationnellles******
@@ -163,5 +164,7 @@ rename s02q32 Dernière_année
 rename s02q33 diplome
 rename s01q02 lien_CM
 label variable nombre_educ "Nombre d'années d'études"
+
+bysort grappe menage : gen taille_menage = _N
 
 save "$wd\temp\base_education_estimation.dta", replace

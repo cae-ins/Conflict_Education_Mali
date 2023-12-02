@@ -1,16 +1,17 @@
 *******DO File comniné pour estimation******
 
 *use "C:\Users\hp\Downloads\Base_education(EHCVM-19).dta"
-
+/*
 ssc install twowayfeweights
 ssc install psmatch2
-
+*/
 clear
 cls
 
 global wd = "C:\Users\" + c(username) + "\OneDrive - GOUVCI\CAE_INS - Fichiers de Cellule d'Analyses Economiques ( CAE)\TRAVAUX DE RECHERCHES\En_Cours\Conflits_Education"
 
 use "$wd\temp\base_education_estimation.dta", clear
+
 ******Identification et construction des cohortes (young cohorte and old cohorte)****
 
 cap gen cohorte=0
@@ -108,16 +109,18 @@ reg nombre_educ depart2 age c.total_conflit##i.trait i.sexe i.milieu i.religion
 /*Approche en diff in diff classique*/
 
 *cas binaire sans contrôles
-didregress (nombre_éducation) (D0),group(depart2) time(age)
-didregress (nombre_éducation) (D1),group(depart2) time(age)
+gen D0_did = D0*trait
+gen D1_did = D1*trait
+didregress (nombre_éducation) (Dcontinu,continuous),group(depart2) time(cohorte)
+didregress (nombre_éducation) (D1_did),group(depart2) time(cohorte)
 didregress (nombre_éducation) (D2),group(depart2) time(age)
 didregress (nombre_éducation) (D3),group(depart2) time(age)
 didregress (nombre_éducation) (D4),group(depart2) time(age)
 
 *cas binaire avec contrôles
-didregress (nombre_éducation i.sexe) (D1),group(depart2) time(age)
-didregress (nombre_éducation i.sexe i.milieu) (D1),group(depart2) time(age)
-didregress (nombre_éducation i.sexe i.milieu i.religion) (D1),group(depart2) time(age)
+didregress (nombre_éducation i.sexe) (D0_did),group(depart2) time(age)
+didregress (nombre_éducation i.sexe i.milieu) (D0_did),group(depart2) time(age)
+didregress (nombre_éducation i.sexe i.milieu i.religion) (D0_did),group(depart2) time(age)
 
 
 *cas continu sans contrôles
@@ -130,26 +133,45 @@ didregress (nombre_éducation i.sexe i.milieu i.religion) (Dcontinu, continuous)
 
 /* Estimation avec Chaisemartin & Hautfoeille (2019) */
 
-twowayfeweights nombre_éducation depart2 age D0, type(feTR) summary_measures
+replace religion = 3 if inlist(religion,4,5)
+foreach var in sexe milieu religion {
+	ta `var', gen(`var'_bin)
+}
 
-did_multiplegt nombre_educ depart2 age D2
+twowayfeweights nombre_éducation depart2 age Dcontinu, type(feTR) summary_measures
+global bin_control = "milieu_bin2 sexe_bin2"
+
+
+
+/* Traitement continu */
+did_multiplegt_dyn nombre_educ depart2 cohorte Dcontinu
+graph export "$wd\img\chaisemartin_hautfoeille_Dcontinu_sans_controle.png", replace
+/* Traitement continu */
+did_multiplegt_dyn nombre_educ depart2 cohorte D0_did
+graph export "$wd\img\chaisemartin_hautfoeille_Dbinaire_sans_controle.png", replace
+did_multiplegt_dyn nombre_educ depart2 cohorte D0_did, controls(sexe_bin2)
+graph export "$wd\img\chaisemartin_hautfoeille_Dbinaire_sans_controle.png", replace
+
+**# Bookmark #1
+did_multiplegt_dyn nombre_educ depart2 cohorte D0_did, controls($bin_control)
+graph export "$wd\img\chaisemartin_hautfoeille_Dcontinu_avec_controle.png", replace
 
 
 /*Approche par regression PSM*/
 
-global var = "i.sexe i.religion i.milieu"
+global var = "i.sexe i.religion i.milieu taille_menage"
 
 **# Important #
 /* Augmenter le nombre de variable explicatives, revoir Dabalen et al. 2012 pour avoir des idées */
 
-psmatch2 D1 $var , kernel k(biweight) out(nombre_éducation) ate
+psmatch2 D0_did $var , kernel k(biweight) out(nombre_éducation) ate
 pstest, both graph  // graph utile
 graph export "$wd\img\adjust1.png", replace
 pstest, both scatter  // graph utile
 graph export "$wd\img\adjust2_scatter.png", replace
 
-teffects psmatch (nombre_éducation) (D1 $var), atet
-teffects psmatch (nombre_éducation) (D1 $var), ate
+teffects psmatch (nombre_éducation) (D0_did $var), atet
+teffects psmatch (nombre_éducation) (D0_did $var), ate
 tebalance density // graph à présenter dans le papier
 graph export "$wd\img\adjust2_density.png", replace
 
@@ -159,4 +181,5 @@ teffects aipw (nombre_éducation $var) (D1 $var), ate //alternatives :  Augmente
 
 
 
+/*Double Robust Estimation*/
 
